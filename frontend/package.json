@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@googlemaps/markerclusterer": "^2.6.2",
+    "@react-google-maps/api": "^2.20.8",
+    "axios": "^1.15.2",
+    "mapbox-gl": "^3.22.0",
+    "react-leaflet-markercluster": "^5.0.0-rc.0"
+  }
+}
