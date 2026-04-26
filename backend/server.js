@@ -1,45 +1,62 @@
-// Import required libraries
-const express = require("express");   // Web framework
-const cors = require("cors");         // Allow cross-origin requests
-const fs = require("fs");             // File system access
-const csv = require("csv-parser");    // Parse CSV files
+const fs = require("fs");
+const csv = require("csv-parser");
+const express = require("express");
+const path = require("path");
+const cors = require("cors");
 
 const app = express();
-app.use(cors()); // Enable frontend (localhost:3000) to call backend (localhost:4000)
+const PORT = 4000;
 
-let stores = []; // Array to hold store data
+app.use(cors()); // Enable CORS for all routes
 
-// Read CSV file and convert each row into GeoJSON format
-fs.createReadStream("stores.csv")
-  .pipe(csv())
-  .on("data", (row) => {
-    // Ensure lat/lon exist before pushing
-    if (row.lat && row.lon) {
-      stores.push({
+const csvFilePath = path.join(__dirname, "my_pois.csv");
+
+app.get("/api/stores", (req, res) => {
+  const { state, brand } = req.query;
+  const features = [];
+
+  if (!fs.existsSync(csvFilePath)) {
+    return res.status(404).json({ error: "CSV file not found at " + csvFilePath });
+  }
+
+  fs.createReadStream(csvFilePath)
+    .pipe(csv())
+    .on("data", (row) => {
+      // 🚫 Skip rows missing both brand and state
+      if (!row.brand_initial && !row.state) return;
+
+      // Apply filters if provided
+      if (state && row.state.toLowerCase() !== state.toLowerCase()) return;
+      if (brand && row.brand_initial.toLowerCase() !== brand.toLowerCase()) return;
+
+      features.push({
         type: "Feature",
         geometry: {
           type: "Point",
-          coordinates: [parseFloat(row.lon), parseFloat(row.lat)], // GeoJSON expects [lon, lat]
+          coordinates: [parseFloat(row.longitude), parseFloat(row.latitude)],
         },
         properties: {
-          name: row.name,
+          brand: row.brand_initial,
           state: row.state,
+          city: row.city,
+          zipcode: row.zipcode,
+          status: row.status,
+          type: row.type,
+          channel: row.channel,
         },
       });
-    }
-  })
-  .on("end", () => {
-    console.log("CSV loaded:", stores.length, "stores");
-  });
+    })
+    .on("end", () => {
+      // ✅ Sample results to avoid overloading frontend
+      const SAMPLE_SIZE = 1000;
+      const sample = features.slice(0, SAMPLE_SIZE);
 
-// API endpoint to serve GeoJSON data
-app.get("/api/stores", (req, res) => {
-  if (!stores.length) {
-    return res.status(500).json({ error: "No store data available" });
-  }
-  res.json({ type: "FeatureCollection", features: stores });
+      res.json({ type: "FeatureCollection", features: sample });
+    })
+    .on("error", (err) => {
+      console.error("Error reading CSV:", err);
+      res.status(500).json({ error: "Failed to read CSV file" });
+    });
 });
 
-// Start backend server
-const PORT = 4000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
